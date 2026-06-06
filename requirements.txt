@@ -1,0 +1,18 @@
+# ASCEND Perception System - Python Dependencies
+# Jetson: pip install -r requirements.txt --break-system-packages
+# PC:     pip install -r requirements.txt
+#
+# NOTE: torch/torchvision on Jetson = install via JetPack wheel, NOT PyPI
+# https://forums.developer.nvidia.com/t/pytorch-for-jetson
+
+opencv-python>=4.8.0
+numpy>=1.24.0
+scikit-image>=0.21.0
+scikit-learn>=1.3.0
+pyserial>=3.5
+PyYAML>=6.0
+psutil>=5.9.0
+tqdm>=4.65.0
+
+# Uncomment for OAK-D Lite:
+# depthai>=2.24.0
