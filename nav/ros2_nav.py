@@ -1,17 +1,17 @@
 """
-nav/ros2_nav.py — ROS2 subscriber for VINS/SLAM odometry.
+nav/ros2_nav.py — ROS2 subscriber for ORB-SLAM3 pose.
 Runs a rclpy node in a background thread.
 get_pose() returns latest cached pose immediately (non-blocking).
 
 Compatible topics:
-  nav_msgs/Odometry   (VINS-Mono, VINS-Fusion, ORB-SLAM3)
-  geometry_msgs/PoseStamped
+  geometry_msgs/PoseStamped   (ORB-SLAM3 default: /orbslam3/camera_pose)
+  nav_msgs/Odometry           (legacy VINS fallback)
 
 Set topic and msg_type in system_config.yaml:
   navigation:
-    type: vins_ros2
-    topic: /vins_estimator/odometry
-    msg_type: Odometry          # Odometry | PoseStamped
+    type: orb_slam3_ros2
+    topic: /orbslam3/camera_pose
+    msg_type: PoseStamped       # PoseStamped | Odometry
 """
 import threading
 import time
@@ -24,8 +24,8 @@ log = logging.getLogger(__name__)
 
 class ROS2Nav(NavInterface):
 
-    def __init__(self, topic: str = "/vins_estimator/odometry",
-                 msg_type: str = "Odometry"):
+    def __init__(self, topic: str = "/orbslam3/camera_pose",
+                 msg_type: str = "PoseStamped"):
         self._topic    = topic
         self._msg_type = msg_type
         self._latest   = PoseStamp(source="ros2", valid=False)
@@ -117,7 +117,7 @@ class _PoseListenerNode:
             x=pos.x, y=pos.y, z=pos.z,
             yaw=yaw,
             timestamp=time.monotonic(),
-            source="vins_ros2",
+            source="orb_slam3_odom",
             valid=True,
         ))
 
@@ -129,7 +129,7 @@ class _PoseListenerNode:
             x=pos.x, y=pos.y, z=pos.z,
             yaw=yaw,
             timestamp=time.monotonic(),
-            source="ros2_pose",
+            source="orb_slam3",
             valid=True,
         ))
 

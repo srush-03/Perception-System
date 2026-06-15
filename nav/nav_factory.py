@@ -11,15 +11,20 @@ log = logging.getLogger(__name__)
 def make_nav(nav_cfg: dict) -> NavInterface:
     nav_type = nav_cfg.get("type", "file").lower()
 
-    if nav_type == "vins_ros2":
+    if nav_type in ("orb_slam3_ros2", "vins_ros2"):
         try:
             from nav.ros2_nav import ROS2Nav
+            # ORB-SLAM3 uses PoseStamped; legacy VINS used Odometry
+            default_topic    = "/orbslam3/camera_pose" if nav_type == "orb_slam3_ros2" \
+                               else "/vins_estimator/odometry"
+            default_msg_type = "PoseStamped" if nav_type == "orb_slam3_ros2" \
+                               else "Odometry"
             nav = ROS2Nav(
-                topic=nav_cfg.get("topic", "/vins_estimator/odometry"),
-                msg_type=nav_cfg.get("msg_type", "Odometry"),
+                topic=nav_cfg.get("topic", default_topic),
+                msg_type=nav_cfg.get("msg_type", default_msg_type),
             )
             nav.start()
-            log.info("NavFactory: ROS2Nav started")
+            log.info(f"NavFactory: ROS2Nav started ({nav_type})")
             return nav
         except Exception as e:
             log.warning(f"ROS2Nav failed ({e}), falling back to FileNav")

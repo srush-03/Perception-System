@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════
+#  ASCEND Perception System — Configuration
+#  Team Marsvista | ISRO IRoC-U 2026 | Elimination Round
+#  Edit this file before every flight. Do NOT hardcode in .py files.
+# ═══════════════════════════════════════════════════════════════
+
+# ── CAMERA ──────────────────────────────────────────────────────
+camera:
+  type: oak_d          # oak_d | usb | csi
+  topic: /oak/rgb/image_rect          # ROS2 topic (used in ros2 mode)
+  width: 1280
+  height: 720
+  fps: 10
+  jpeg_quality: 95
+
+# ── NAVIGATION (ORB-SLAM3 via ROS2) ─────────────────────────────
+navigation:
+  type: orb_slam3_ros2                # orb_slam3_ros2 | file
+  topic: /orbslam3/camera_pose       # confirmed from: ros2 topic list
+  msg_type: PoseStamped              # geometry_msgs/PoseStamped
+  pose_file: state/current_pose.json # fallback if ROS2 unavailable
+  poll_interval_ms: 50
+  pose_timeout_sec: 2.0              # mark pose invalid if no update for 2s
+
+# ── TRIGGER (dock/charging detection) ───────────────────────────
+trigger:
+  type: file                         # file | arduino | ros2
+  timeout_sec: 600                   # wait max 10 min for dock signal
+
+# ── KEYFRAME SELECTION ──────────────────────────────────────────
+keyframe:
+  blur_threshold: 80.0               # Laplacian variance — reject below this
+  ssim_threshold: 0.85               # reject frame if SSIM > this vs last saved
+  min_interval_sec: 0.5              # minimum gap between saved frames
+  entropy_min: 3.5                   # reject very low-information frames
+
+# ── QUALITY FILTER ──────────────────────────────────────────────
+quality:
+  blur_threshold: 80.0
+  overexpose_threshold: 240          # mean brightness above = overexposed
+  underexpose_threshold: 25          # mean brightness below = too dark
+  min_entropy: 3.5
+
+# ── MATCHING ────────────────────────────────────────────────────
+matching:
+  threshold: 0.52                    # minimum fused score to count as detection
+  scales: [1.0, 0.75, 0.5]          # sliding window scales vs frame
+  window_sizes: [128, 192, 256]      # pixel sizes to try (all → 128x128 LR)
+  cluster_radius_m: 1.0             # detections within 1m = same instance
+
+# ── DEDUPLICATION ───────────────────────────────────────────────
+deduplication:
+  spatial_radius_m: 1.0
+  embedding_similarity: 0.92
+  temporal_window_sec: 30.0
+
+# ── STORAGE MANAGEMENT ──────────────────────────────────────────
+storage:
+  warn_gb: 2.0                       # write STORAGE_WARNING alert
+  halt_gb: 0.5                       # stop saving frames
+  cleanup_after_transfer: true
+
+# ── ARENA ───────────────────────────────────────────────────────
+arena:
+  width_m: 10.7                      # 35ft
+  height_m: 7.6                      # 25ft
+  altitude_min: 2.0                  # rulebook minimum flight height
+  altitude_max: 6.0                  # rulebook maximum flight height
+
+# ── BOUNDARY DETECTOR ───────────────────────────────────────────
+boundary_detector:
+  hsv_lower: [18, 80, 80]
+  hsv_upper: [35, 255, 255]
+  min_contour_area: 500
+  min_aspect_ratio: 4.0
+
+# ── PATHS ───────────────────────────────────────────────────────
+paths:
+  frames_dir:   data/frames
+  mosaic_dir:   data/mosaic
+  matches_dir:  data/matches
+  logs_dir:     data/logs
+  alerts_dir:   alerts
+  state_dir:    state
+  cache_dir:    cache
+  refs_dir:     refs
+  transfer_dir: data/transfer
+
+# ── LOGGING ─────────────────────────────────────────────────────
+logging:
+  level: INFO                        # DEBUG | INFO | WARNING | ERROR
