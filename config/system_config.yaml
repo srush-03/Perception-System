@@ -56,7 +56,7 @@ deduplication:
 
 # ── STORAGE MANAGEMENT ──────────────────────────────────────────
 storage:
-  warn_gb: 2.0                       # write STORAGE_WARNING alert
+  warn_gb: 2.0                       # write STORAGE_WARNING alertgit 
   halt_gb: 0.5                       # stop saving frames
   cleanup_after_transfer: true
 
