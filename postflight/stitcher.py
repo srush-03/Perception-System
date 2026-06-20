@@ -92,14 +92,16 @@ class Stitcher:
             return None
 
         canvas = frames[0].copy()
+        frames[0] = None  # free original ref now that canvas holds a copy
+
         for i in range(1, len(frames)):
-            H = self._compute_homography(canvas, frames[i], batch_idx, i)
+            target = frames[i]
+            H = self._compute_homography(canvas, target, batch_idx, i)
             if H is not None:
-                canvas = self._warp_and_blend(canvas, frames[i], H)
+                canvas = self._warp_and_blend(canvas, target, H)
             else:
-                # Translation fallback: just overlay
-                canvas = self._blend_center(canvas, frames[i])
-            del frames[i]
+                canvas = self._blend_center(canvas, target)
+            frames[i] = None  # release this frame's memory, keep list length stable
             gc.collect()
 
         return canvas
