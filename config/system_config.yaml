@@ -43,10 +43,36 @@ quality:
 
 # ── MATCHING ────────────────────────────────────────────────────
 matching:
-  threshold: 0.52                    # minimum fused score to count as detection
   scales: [1.0, 0.75, 0.5]          # sliding window scales vs frame
   window_sizes: [128, 192, 256]      # pixel sizes to try (all → 128x128 LR)
   cluster_radius_m: 1.0             # detections within 1m = same instance
+
+  # Feature-specific fusion weights — must sum to 1.0 per feature type.
+  # Tuned for known weaknesses: oxide has weak DINO signal (looks
+  # soil-like), ice/foil has weak texture under diffuse light (matte,
+  # not specular), rock has near-zero color signal vs background.
+  weights:
+    layered_rock:
+      dino: 0.45
+      lbp:  0.40
+      hsv:  0.15
+    oxide_patch:
+      dino: 0.25
+      lbp:  0.35
+      hsv:  0.40
+    reflective_ice:
+      dino: 0.45
+      lbp:  0.15
+      hsv:  0.40
+
+  # Raised from 0.52 — that floor was accepting background soil noise
+  # as LOW-confidence matches (confirmed: 60+ false "reflective_ice"
+  # hits on plain soil at 0.69-0.77). Needs real calibration against
+  # your seeds + known-negative soil photos before competition.
+  thresholds:
+    high:   0.82
+    medium: 0.72
+    low:    0.65   # below this = REJECT, not LOW
 
 # ── DEDUPLICATION ───────────────────────────────────────────────
 deduplication:

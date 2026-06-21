@@ -1,9 +1,20 @@
 """
 postflight/stitcher.py — Sequential homography-based mosaic stitching.
-Uses ORB + BFMatcher + RANSAC. Falls back to translation-only if match count < 12.
+Uses SIFT + BFMatcher + RANSAC (switched from ORB — ORB's binary
+descriptors were too weak on low-texture red-brown gravel soil,
+producing <12 good matches per frame and falling back to an
+unaligned center-blend that looked like a smeared double-exposure).
+SIFT is slower but far more robust on repetitive/low-contrast terrain,
+which is fine since stitching is post-flight only, not real-time.
+
+If a frame still can't be aligned (insufficient matches even with
+SIFT), it is now SKIPPED rather than blindly overlaid — an honest
+gap in the mosaic is more useful for debugging than a falsely
+"complete" but garbled image.
+
 Processes frames in batches of 20 to stay within Jetson RAM limits.
 Output mosaic is INTERNAL ONLY (visualization + spatial reasoning).
-Coordinate source is always VINS metadata, not pixel positions.
+Coordinate source is always nav/pose metadata, not pixel positions.
 """
 import cv2
 import os
@@ -27,8 +38,8 @@ class Stitcher:
     def __init__(self, mosaic_dir: str = "data/mosaic"):
         self._mosaic_dir = mosaic_dir
         os.makedirs(mosaic_dir, exist_ok=True)
-        self._orb = cv2.ORB_create(nfeatures=1500)
-        self._bf  = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+        self._sift = cv2.SIFT_create(nfeatures=2000)
+        self._bf   = cv2.BFMatcher(cv2.NORM_L2, crossCheck=False)
         self._transforms: List[dict] = []
 
     def stitch(self, frame_paths: List[str], sortie_id: str) -> Optional[str]:
@@ -93,6 +104,7 @@ class Stitcher:
 
         canvas = frames[0].copy()
         frames[0] = None  # free original ref now that canvas holds a copy
+        skipped = 0
 
         for i in range(1, len(frames)):
             target = frames[i]
@@ -100,9 +112,18 @@ class Stitcher:
             if H is not None:
                 canvas = self._warp_and_blend(canvas, target, H)
             else:
-                canvas = self._blend_center(canvas, target)
+                # Previously: blind center-blend overlay (caused the
+                # smeared double-exposure look on low-texture soil).
+                # Now: skip this frame, keep the mosaic honest.
+                skipped += 1
+                log.debug(f"  Batch {batch_idx} frame {i}: insufficient "
+                          f"matches, skipping (not blending)")
             frames[i] = None  # release this frame's memory, keep list length stable
             gc.collect()
+
+        if skipped:
+            log.warning(f"  Batch {batch_idx}: {skipped}/{len(frames)-1} "
+                        f"frames skipped (could not align)")
 
         return canvas
 
@@ -113,7 +134,7 @@ class Stitcher:
             if H is not None:
                 result = self._warp_and_blend(result, m, H)
             else:
-                result = self._blend_center(result, m)
+                log.warning("  Batch-mosaic merge: insufficient matches, skipping")
         return result
 
     def _compute_homography(self, base: np.ndarray, target: np.ndarray,
@@ -121,10 +142,10 @@ class Stitcher:
         g1 = cv2.cvtColor(base,   cv2.COLOR_BGR2GRAY)
         g2 = cv2.cvtColor(target, cv2.COLOR_BGR2GRAY)
 
-        kp1, des1 = self._orb.detectAndCompute(g1, None)
-        kp2, des2 = self._orb.detectAndCompute(g2, None)
+        kp1, des1 = self._sift.detectAndCompute(g1, None)
+        kp2, des2 = self._sift.detectAndCompute(g2, None)
 
-        if des1 is None or des2 is None:
+        if des1 is None or des2 is None or len(kp1) < 2 or len(kp2) < 2:
             return None
 
         matches = self._bf.knnMatch(des1, des2, k=2)
@@ -177,20 +198,3 @@ class Stitcher:
         empty = (mask_b == 0) & (mask_w == 1)
         result[empty] = warped[empty].astype(np.float32)
         return result.astype(np.uint8)
-
-    @staticmethod
-    def _blend_center(base: np.ndarray, target: np.ndarray) -> np.ndarray:
-        """Fallback: blend target centered on base canvas."""
-        result = base.copy()
-        th, tw = target.shape[:2]
-        bh, bw = base.shape[:2]
-        y0 = max(0, (bh - th) // 2)
-        x0 = max(0, (bw - tw) // 2)
-        y1 = min(bh, y0 + th)
-        x1 = min(bw, x0 + tw)
-        roi_h = y1 - y0; roi_w = x1 - x0
-        result[y0:y1, x0:x1] = cv2.addWeighted(
-            result[y0:y1, x0:x1], 0.5,
-            target[:roi_h, :roi_w], 0.5, 0
-        )
-        return result
